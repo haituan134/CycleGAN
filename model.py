@@ -5,7 +5,7 @@ from tensorflow.keras import layers
 
 import os
 import time
-import tqdm
+from tqdm import tqdm
 import matplotlib.pyplot as plt
 from IPython.display import clear_output
 
@@ -137,14 +137,14 @@ class CycleGAN():
     self.loss_obj = tf.keras.losses.BinaryCrossentropy(from_logits=True)
 
   def discriminator_loss(self, real, generated):
-    real_loss = loss_obj(tf.ones_like(real), real)
-    generated_loss = loss_obj(tf.zeros_like(generated), generated)
+    real_loss = self.loss_obj(tf.ones_like(real), real)
+    generated_loss = self.loss_obj(tf.zeros_like(generated), generated)
     total_disc_loss = real_loss + generated_loss
 
     return total_disc_loss * 0.5
 
   def generator_loss(self, generated):
-    return loss_obj(tf.ones_like(generated), generated)
+    return self.loss_obj(tf.ones_like(generated), generated)
 
   def calc_cycle_loss(self, real_image, cycled_image):
     loss1 = tf.reduce_mean(tf.abs(real_image - cycled_image))
@@ -182,11 +182,11 @@ class CycleGAN():
       gen_g_loss = self.generator_loss(disc_fake_y)
       gen_f_loss = self.generator_loss(disc_fake_x)
       
-      total_cycle_loss = self.calc_cycle_loss(real_x, cycled_x) + calc_cycle_loss(real_y, cycled_y)
+      total_cycle_loss = self.calc_cycle_loss(real_x, cycled_x) + self.calc_cycle_loss(real_y, cycled_y)
       
       # Total generator loss = adversarial loss + cycle loss
-      total_gen_g_loss = gen_g_loss + total_cycle_loss + identity_loss(real_y, same_y)
-      total_gen_f_loss = gen_f_loss + total_cycle_loss + identity_loss(real_x, same_x)
+      total_gen_g_loss = gen_g_loss + total_cycle_loss + self.identity_loss(real_y, same_y)
+      total_gen_f_loss = gen_f_loss + total_cycle_loss + self.identity_loss(real_x, same_x)
 
       disc_x_loss = self.discriminator_loss(disc_real_x, disc_fake_x)
       disc_y_loss = self.discriminator_loss(disc_real_y, disc_fake_y)
@@ -235,7 +235,7 @@ class CycleGAN():
     for epoch in tqdm(range(EPOCHS)):
 
       for image_x, image_y in dataset:
-        total_gen_g_loss, total_gen_f_loss, disc_x_loss, disc_y_loss = train_step(image_x, image_y)
+        total_gen_g_loss, total_gen_f_loss, disc_x_loss, disc_y_loss = self.train_step(image_x, image_y)
 
       clear_output(wait=True)
       # Using a consistent image (sample_horse) so that the progress of the model
