@@ -13,9 +13,10 @@ class Data():
     monet_path = 'gs://kds-00b8801b5282f824427cc2a2ed904cc6fcd501afbdf21b509c7f4126/monet_tfrec/'
     photo_path = 'gs://kds-00b8801b5282f824427cc2a2ed904cc6fcd501afbdf21b509c7f4126/photo_tfrec/'
 
-    self.monet_files = tf.io.gfile.glob(monet_path + '/*.tfrec')
-    self.photo_files = tf.io.gfile.glob(photo_path + '/*tfrec')
+    self.monet_files = tf.io.gfile.glob(monet_path + '*.tfrec')
+    self.photo_files = tf.io.gfile.glob(photo_path + '*.tfrec')
     self.num_parallel = num_parallel
+    self.image_size = [256, 256, 3]
 
   def decode_image(self, image, image_size):
     image = tf.image.decode_jpeg(image, channels=3)
@@ -74,5 +75,3 @@ class Data():
     print(f'Photo TFRecord Files: {len(self.photo_files)}')
     print(f'Monet image file: {n_monet}')
     print(f'Photo image file: {n_photo}')
-
-monet_dataset = Data().info()
