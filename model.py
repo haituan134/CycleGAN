@@ -114,14 +114,12 @@ class CycleGan(keras.Model):
         photo_generator,
         monet_discriminator,
         photo_discriminator,
-        lambda_cycle=10,
     ):
         super(CycleGan, self).__init__()
         self.m_gen = monet_generator
         self.p_gen = photo_generator
         self.m_disc = monet_discriminator
         self.p_disc = photo_discriminator
-        self.lambda_cycle = lambda_cycle
         
     def compile(
         self,
@@ -177,11 +175,11 @@ class CycleGan(keras.Model):
             photo_gen_loss = self.gen_loss_fn(disc_fake_photo)
 
             # evaluates total cycle consistency loss
-            total_cycle_loss = self.cycle_loss_fn(real_monet, cycled_monet, self.lambda_cycle) + self.cycle_loss_fn(real_photo, cycled_photo, self.lambda_cycle)
+            total_cycle_loss = self.cycle_loss_fn(real_monet, cycled_monet) + self.cycle_loss_fn(real_photo, cycled_photo)
 
             # evaluates total generator loss
-            total_monet_gen_loss = monet_gen_loss + total_cycle_loss + self.identity_loss_fn(real_monet, same_monet, self.lambda_cycle)
-            total_photo_gen_loss = photo_gen_loss + total_cycle_loss + self.identity_loss_fn(real_photo, same_photo, self.lambda_cycle)
+            total_monet_gen_loss = monet_gen_loss + total_cycle_loss + self.identity_loss_fn(real_monet, same_monet)
+            total_photo_gen_loss = photo_gen_loss + total_cycle_loss + self.identity_loss_fn(real_photo, same_photo)
 
             # evaluates discriminator loss
             monet_disc_loss = self.disc_loss_fn(disc_real_monet, disc_fake_monet)
