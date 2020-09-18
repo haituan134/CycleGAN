@@ -61,12 +61,17 @@ class Data():
 
     return dataset
 
-  def get_monet_dataset(self, augment=False, repeat=True, shuffle=True, batch_size=1):
-    return self.get_dataset(self.monet_files)
+  def get_monet_dataset(self, augment=None, repeat=True, shuffle=True, batch_size=1):
+    return self.get_dataset(self.monet_files, augment, repeat, shuffle, batch_size)
 
-  def get_photo_dataset(self, augment=False, repeat=True, shuffle=True, batch_size=1):
-    return self.get_dataset(self.photo_files)
-  
+  def get_photo_dataset(self, augment=None, repeat=True, shuffle=True, batch_size=1):
+    return self.get_dataset(self.photo_files, augment, repeat, shuffle, batch_size)
+
+  def get_length(self):
+    n_monet = np.sum([int(re.compile(r"-([0-9]*)\.").search(filename).group(1)) for filename in self.monet_files])
+    n_photo = np.sum([int(re.compile(r"-([0-9]*)\.").search(filename).group(1)) for filename in self.photo_files])
+    return max(n_monet, n_photo)
+
   def info(self):
     n_monet = np.sum([int(re.compile(r"-([0-9]*)\.").search(filename).group(1)) for filename in self.monet_files])
     n_photo = np.sum([int(re.compile(r"-([0-9]*)\.").search(filename).group(1)) for filename in self.photo_files])
