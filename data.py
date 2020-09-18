@@ -7,7 +7,7 @@ import re
 import numpy as np
 import matplotlib.pyplot as plt 
 
-class Data():
+class MonetDataset():
   def __init__(self, num_parallel=tf.data.experimental.AUTOTUNE):
     super().__init__()
     monet_path = 'gs://kds-00b8801b5282f824427cc2a2ed904cc6fcd501afbdf21b509c7f4126/monet_tfrec/'
@@ -76,6 +76,7 @@ class Data():
     n_monet = np.sum([int(re.compile(r"-([0-9]*)\.").search(filename).group(1)) for filename in self.monet_files])
     n_photo = np.sum([int(re.compile(r"-([0-9]*)\.").search(filename).group(1)) for filename in self.photo_files])
     
+    print(f'Dataset get from https://www.kaggle.com/c/gan-getting-started')
     print(f'Monet TFRecord Files: {len(self.monet_files)}')
     print(f'Photo TFRecord Files: {len(self.photo_files)}')
     print(f'Monet image file: {n_monet}')
