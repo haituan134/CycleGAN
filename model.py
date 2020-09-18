@@ -4,10 +4,6 @@ from tensorflow import keras
 from tensorflow.keras import layers
 
 import os
-import time
-from tqdm import tqdm
-import matplotlib.pyplot as plt
-from IPython.display import clear_output
 
 def downsample(filters, size, apply_instancenorm=True):
     initializer = tf.random_normal_initializer(0., 0.02)
@@ -110,126 +106,123 @@ def Discriminator():
 class CycleGan(keras.Model):
     def __init__(
         self,
-        monet_generator,
-        photo_generator,
-        monet_discriminator,
-        photo_discriminator,
+        generator_g,
+        generator_f,
+        discriminator_x,
+        discriminator_y,
     ):
         super(CycleGan, self).__init__()
-        self.m_gen = monet_generator
-        self.p_gen = photo_generator
-        self.m_disc = monet_discriminator
-        self.p_disc = photo_discriminator
+        self.generator_g = generator_g
+        self.generator_f = generator_f
+        self.discriminator_x = discriminator_x
+        self.discriminator_y = discriminator_y
         
     def compile(
         self,
-        m_gen_optimizer,
-        p_gen_optimizer,
-        m_disc_optimizer,
-        p_disc_optimizer,
-        gen_loss_fn,
-        disc_loss_fn,
-        cycle_loss_fn,
-        identity_loss_fn
+        generator_g_optimizer,
+        generator_f_optimizer,
+        discriminator_x_optimizer,
+        discriminator_y_optimizer,
+        generator_loss,
+        discriminator_loss,
+        calc_cycle_loss,
+        identity_loss
     ):
         super(CycleGan, self).compile()
-        self.m_gen_optimizer = m_gen_optimizer
-        self.p_gen_optimizer = p_gen_optimizer
-        self.m_disc_optimizer = m_disc_optimizer
-        self.p_disc_optimizer = p_disc_optimizer
-        self.gen_loss_fn = gen_loss_fn
-        self.disc_loss_fn = disc_loss_fn
-        self.cycle_loss_fn = cycle_loss_fn
-        self.identity_loss_fn = identity_loss_fn
+        self.generator_g_optimizer = generator_g_optimizer
+        self.generator_f_optimizer = generator_f_optimizer
+        self.discriminator_x_optimizer = discriminator_x_optimizer
+        self.discriminator_y_optimizer = discriminator_y_optimizer
+        self.generator_loss = generator_loss
+        self.discriminator_loss = discriminator_loss
+        self.calc_cycle_loss = calc_cycle_loss
+        self.identity_loss = identity_loss
 
     def call(self, inputs):
         photo_inputs, monet_inputs = inputs
-        return self.m_gen(photo_inputs), self.p_gen(monet_inputs)
+        return self.generator_g(photo_inputs), self.generator_f(monet_inputs)
 
     def train_step(self, batch_data):
-        real_monet, real_photo = batch_data
+        real_x, real_y = batch_data
         
         with tf.GradientTape(persistent=True) as tape:
-            # photo to monet back to photo
-            fake_monet = self.m_gen(real_photo, training=True)
-            cycled_photo = self.p_gen(fake_monet, training=True)
+          # Generator G translates X -> Y
+          # Generator F translates Y -> X.
+          
+          fake_y = self.generator_g(real_x, training=True)
+          cycled_x = self.generator_f(fake_y, training=True)
 
-            # monet to photo back to monet
-            fake_photo = self.p_gen(real_monet, training=True)
-            cycled_monet = self.m_gen(fake_photo, training=True)
+          fake_x = self.generator_f(real_y, training=True)
+          cycled_y = self.generator_g(fake_x, training=True)
 
-            # generating itself
-            same_monet = self.m_gen(real_monet, training=True)
-            same_photo = self.p_gen(real_photo, training=True)
+          # same_x and same_y are used for identity loss.
+          same_x = self.generator_f(real_x, training=True)
+          same_y = self.generator_g(real_y, training=True)
 
-            # discriminator used to check, inputing real images
-            disc_real_monet = self.m_disc(real_monet, training=True)
-            disc_real_photo = self.p_disc(real_photo, training=True)
+          disc_real_x = self.discriminator_x(real_x, training=True)
+          disc_real_y = self.discriminator_y(real_y, training=True)
 
-            # discriminator used to check, inputing fake images
-            disc_fake_monet = self.m_disc(fake_monet, training=True)
-            disc_fake_photo = self.p_disc(fake_photo, training=True)
+          disc_fake_x = self.discriminator_x(fake_x, training=True)
+          disc_fake_y = self.discriminator_y(fake_y, training=True)
 
-            # evaluates generator loss
-            monet_gen_loss = self.gen_loss_fn(disc_fake_monet)
-            photo_gen_loss = self.gen_loss_fn(disc_fake_photo)
+          # calculate the loss
+          gen_g_loss = self.generator_loss(disc_fake_y)
+          gen_f_loss = self.generator_loss(disc_fake_x)
+          
+          total_cycle_loss = self.calc_cycle_loss(real_x, cycled_x) + self.calc_cycle_loss(real_y, cycled_y)
+          
+          # Total generator loss = adversarial loss + cycle loss
+          total_gen_g_loss = gen_g_loss + total_cycle_loss + self.identity_loss(real_y, same_y)
+          total_gen_f_loss = gen_f_loss + total_cycle_loss + self.identity_loss(real_x, same_x)
 
-            # evaluates total cycle consistency loss
-            total_cycle_loss = self.cycle_loss_fn(real_monet, cycled_monet) + self.cycle_loss_fn(real_photo, cycled_photo)
-
-            # evaluates total generator loss
-            total_monet_gen_loss = monet_gen_loss + total_cycle_loss + self.identity_loss_fn(real_monet, same_monet)
-            total_photo_gen_loss = photo_gen_loss + total_cycle_loss + self.identity_loss_fn(real_photo, same_photo)
-
-            # evaluates discriminator loss
-            monet_disc_loss = self.disc_loss_fn(disc_real_monet, disc_fake_monet)
-            photo_disc_loss = self.disc_loss_fn(disc_real_photo, disc_fake_photo)
-
-        # Calculate the gradients for generator and discriminator
-        monet_generator_gradients = tape.gradient(total_monet_gen_loss,
-                                                  self.m_gen.trainable_variables)
-        photo_generator_gradients = tape.gradient(total_photo_gen_loss,
-                                                  self.p_gen.trainable_variables)
-
-        monet_discriminator_gradients = tape.gradient(monet_disc_loss,
-                                                      self.m_disc.trainable_variables)
-        photo_discriminator_gradients = tape.gradient(photo_disc_loss,
-                                                      self.p_disc.trainable_variables)
-
-        # Apply the gradients to the optimizer
-        self.m_gen_optimizer.apply_gradients(zip(monet_generator_gradients,
-                                                 self.m_gen.trainable_variables))
-
-        self.p_gen_optimizer.apply_gradients(zip(photo_generator_gradients,
-                                                 self.p_gen.trainable_variables))
-
-        self.m_disc_optimizer.apply_gradients(zip(monet_discriminator_gradients,
-                                                  self.m_disc.trainable_variables))
-
-        self.p_disc_optimizer.apply_gradients(zip(photo_discriminator_gradients,
-                                                  self.p_disc.trainable_variables))
+          disc_x_loss = self.discriminator_loss(disc_real_x, disc_fake_x)
+          disc_y_loss = self.discriminator_loss(disc_real_y, disc_fake_y)
         
+        # Calculate the gradients for generator and discriminator
+        generator_g_gradients = tape.gradient(total_gen_g_loss, 
+                                              self.generator_g.trainable_variables)
+        generator_f_gradients = tape.gradient(total_gen_f_loss, 
+                                              self.generator_f.trainable_variables)
+        
+        discriminator_x_gradients = tape.gradient(disc_x_loss, 
+                                                  self.discriminator_x.trainable_variables)
+        discriminator_y_gradients = tape.gradient(disc_y_loss, 
+                                                  self.discriminator_y.trainable_variables)
+        
+        # Apply the gradients to the optimizer
+        self.generator_g_optimizer.apply_gradients(zip(generator_g_gradients, 
+                                                  self.generator_g.trainable_variables))
+
+        self.generator_f_optimizer.apply_gradients(zip(generator_f_gradients, 
+                                                  self.generator_f.trainable_variables))
+        
+        self.discriminator_x_optimizer.apply_gradients(zip(discriminator_x_gradients,
+                                                      self.discriminator_x.trainable_variables))
+        
+        self.discriminator_y_optimizer.apply_gradients(zip(discriminator_y_gradients,
+                                                      self.discriminator_y.trainable_variables))
+
         return {
-            "monet_gen_loss": total_monet_gen_loss,
-            "photo_gen_loss": total_photo_gen_loss,
-            "monet_disc_loss": monet_disc_loss,
-            "photo_disc_loss": photo_disc_loss
+            "gen_g_loss": total_gen_g_loss,
+            "gen_f_loss": total_gen_f_loss,
+            "disc_x_loss": disc_x_loss,
+            "disc_y_loss": disc_y_loss
         }
         
     def save(self, path):
       if not os.path.exists(path):
         os.makedirs(path)
-      self.m_gen.save(path + '/m_den.h5')
-      self.m_disc.save(path + '/m_dic.h5')
-      self.p_gen.save(path + '/p_gen.h5')
-      self.p_disc.save(path + '/p_dics.h5')
+      self.generator_g.save(path + '/generator_g.h5')
+      self.discriminator_y.save(path + '/discriminator_y.h5')
+      self.generator_f.save(path + '/generator_f.h5')
+      self.discriminator_x.save(path + '/discriminator_x.h5')
 
     @staticmethod
     def load(path):
       result = CycleGan(None, None, None, None)
-      result.m_gen = keras.models.load_model(path + '/m_den.h5')
-      result.m_disc = keras.models.load_model(path + '/m_dic.h5')
-      result.p_gen = keras.models.load_model(path + '/p_gen.h5')
-      result.p_disc = keras.models.load_model(path + '/p_dics.h5')
+      result.generator_g = keras.models.load_model(path + '/generator_g.h5')
+      result.discriminator_y = keras.models.load_model(path + '/discriminator_y.h5')
+      result.generator_f = keras.models.load_model(path + '/generator_f.h5')
+      result.discriminator_x = keras.models.load_model(path + '/discriminator_x.h5')
       
       return result
